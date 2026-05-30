@@ -80,7 +80,7 @@ model Jewelry {
   // Verificación
   status            String    @default("pending") // pending, verified, rejected
   verifiedAt        DateTime?
-  verificationDocs  String[]  @default([])
+  verificationDocs  String?
 
   // Comisión
   commissionRate    Float     @default(0.08)
@@ -122,7 +122,7 @@ model Item {
   year              String?
 
   // Imágenes
-  images            String[]  @default([])
+  images            String?
   mainImage         String?
 
   // Valorización
