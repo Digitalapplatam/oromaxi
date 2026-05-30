@@ -1,0 +1,265 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================
+// USUARIOS BASE
+// =====================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  phone             String?
+  passwordHash      String
+
+  // Perfil
+  firstName         String
+  lastName          String
+  profileImage      String?
+
+  // Ubicación (Ecuador)
+  country           String    @default("Ecuador")
+  state             String
+  city              String
+
+  // Verificación
+  isVerified        Boolean   @default(false)
+  verificationDate  DateTime?
+  idDocument        String?
+  idType            String?
+
+  // Rol
+  role              String    @default("user") // user, jewelry, admin
+
+  // Rating
+  rating            Float?    @default(0)
+  totalReviews      Int       @default(0)
+  soldCount         Int       @default(0)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relaciones
+  items             Item[]
+  offersReceived    Offer[]   @relation("OfferReceiver")
+  offers            Offer[]   @relation("OfferMaker")
+  reviews           Review[]
+  jewelry           Jewelry?
+
+  @@index([email])
+  @@index([role])
+  @@index([city])
+}
+
+// =====================
+// JOYERÍAS VERIFICADAS
+// =====================
+
+model Jewelry {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Info comercial
+  businessName      String
+  businessLicense   String    @unique
+  taxId             String?
+
+  // Ubicación
+  address           String
+  phone             String
+
+  // Verificación
+  status            String    @default("pending") // pending, verified, rejected
+  verifiedAt        DateTime?
+  verificationDocs  String[]  @default([])
+
+  // Comisión
+  commissionRate    Float     @default(0.08)
+  stripeAccountId   String?
+
+  // Métricas
+  rating            Float?
+  totalTransactions Int       @default(0)
+  responseTime      Int?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([verifiedAt])
+}
+
+// =====================
+// ITEMS (JOYAS/RELOJES)
+// =====================
+
+model Item {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Datos básicos
+  title             String
+  description       String    @db.Text
+  category          String    // ring, necklace, watch, bracelet, earrings, coins, bars
+
+  // Características
+  material          String    // oro, plata, platino
+  purity            String?   // 18K, 14K, 24K
+  weight            Float
+  brand             String?
+  model             String?
+  condition         String    // excellent, very_good, good, fair, poor
+  year              String?
+
+  // Imágenes
+  images            String[]  @default([])
+  mainImage         String?
+
+  // Valorización
+  expectedPrice     Float
+  minAcceptable     Float?
+  estimatedValue    Float?
+
+  // TIPO DE VENTA - CRÍTICO
+  saleType          String    // definitive, buyback, auction
+
+  // Para recompra
+  buybackMonthly    Float?
+  buybackMaxMonths  Int?
+
+  // Status
+  status            String    @default("active") // active, sold, pending, rejected
+  adminApproved     Boolean   @default(false)
+  approvedAt        DateTime?
+  rejectionReason   String?
+
+  // Ubicación
+  city              String
+
+  // Auditoría
+  views             Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relaciones
+  offers            Offer[]
+  settlement        Settlement?
+
+  @@index([userId])
+  @@index([status])
+  @@index([saleType])
+  @@index([category])
+  @@index([city])
+}
+
+// =====================
+// OFERTAS
+// =====================
+
+model Offer {
+  id                String    @id @default(cuid())
+
+  itemId            String
+  item              Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  makerId           String
+  maker             User      @relation("OfferMaker", fields: [makerId], references: [id])
+
+  receiverId        String
+  receiver          User      @relation("OfferReceiver", fields: [receiverId], references: [id])
+
+  // Oferta
+  amount            Float
+  message           String?   @db.Text
+
+  // Status
+  status            String    @default("pending")
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  rejectionReason   String?
+
+  // Settlement
+  settlement        Settlement?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([itemId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// =====================
+// SETTLEMENT (PAGOS)
+// =====================
+
+model Settlement {
+  id                String    @id @default(cuid())
+
+  offerId           String    @unique
+  offer             Offer     @relation(fields: [offerId], references: [id])
+
+  itemId            String    @unique
+  item              Item      @relation(fields: [itemId], references: [id])
+
+  // Participantes
+  sellerId          String
+  buyerId           String
+
+  // Montos
+  amount            Float
+  platformFee       Float
+  sellerReceives    Float
+
+  // Pago
+  stripePaymentId   String?
+  paymentStatus     String    @default("pending")
+  paymentDate       DateTime?
+
+  // Recompra
+  isBuyback         Boolean   @default(false)
+  buybackRate       Float?
+  buybackDueDate    DateTime?
+
+  // Status
+  status            String    @default("pending")
+  completedAt       DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// =====================
+// REVIEWS
+// =====================
+
+model Review {
+  id                String    @id @default(cuid())
+
+  fromUserId        String
+  fromUser          User      @relation(fields: [fromUserId], references: [id])
+
+  itemId            String?
+
+  rating            Int
+  comment           String?   @db.Text
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([itemId, fromUserId])
+  @@index([fromUserId])
+}
